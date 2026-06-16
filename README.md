@@ -3,15 +3,15 @@
 **Contribution Number:** 1  
 **Student:** Pedro Pacheco  
 **Issue:** [InnerWarden #850: test(agent): cover Ollama provider HTTP response branches](https://github.com/InnerWarden/innerwarden/issues/850)  
-**Status:** Phase I Complete
+**Status:** Phase II Complete Draft
 
 ---
 
 ## Why I Chose This Issue
 
-I chose this issue because it is a focused test-coverage task around an Ollama provider adapter, which connects to my interest in local LLM tooling while staying bounded enough for a first open-source contribution. The issue gives clear acceptance criteria, names the exact file involved, and says no real Ollama server or API key should be required.
+I chose this issue because it is a test-coverage task around an Ollama provider adapter, which connects to my interest in local LLM tooling while still being realistic for a first open-source contribution. The issue gives clear acceptance criteria, names the exact file involved, and says no real Ollama server or API key should be required.
 
-This also fits what I want to practice during AI301: using AI tools to ramp into an unfamiliar codebase, understand existing test patterns, and contribute a small but useful PR. I have experience with C/C++, Python, LLM tooling, GitHub Issues, and debugging, so Rust is the main learning stretch here, but the scope is narrow enough to make that realistic.
+This also fits what I want to practice during AI301: using AI tools to ramp into an unfamiliar codebase, understand existing test patterns, and contribute a small PR that maintainers could actually review. I have experience with C/C++, Python, LLM tooling, GitHub Issues, and debugging, so Rust is the main learning stretch here.
 
 ---
 
@@ -21,13 +21,17 @@ This also fits what I want to practice during AI301: using AI tools to ramp into
 
 The `crates/agent/src/ai/ollama.rs` provider adapter has existing tests for construction and JSON extraction helpers, but it is missing coverage for important HTTP response and error-handling branches in `chat` and `decide`.
 
+The specific functions involved are `OllamaProvider::chat`, `OllamaProvider::decide`, and the existing test module in the same file.
+
 ### Expected Behavior
 
 The provider should be tested with mocked HTTP responses so successful responses, malformed responses, HTTP errors, and request failures are covered without needing a real Ollama server.
 
 ### Current Behavior
 
-The issue reports that local coverage for this file is only 72.86% line coverage, with useful missing coverage in the `chat` and `decide` HTTP handling paths.
+The issue reports that local coverage for this file is only 72.86% line coverage, with missing coverage in the `chat` and `decide` HTTP handling paths.
+
+My local baseline reproduces the same kind of gap: the targeted Ollama test command passes, but it only runs six helper/constructor tests and does not exercise the provider's HTTP behavior.
 
 ### Affected Components
 
@@ -41,20 +45,119 @@ The issue reports that local coverage for this file is only 72.86% line coverage
 
 ### Environment Setup
 
-To be completed in Phase II after forking and cloning the InnerWarden repository locally.
+I started by setting up the project on my Windows machine. Rust itself installed correctly on Windows:
+
+- `rustc 1.93.1`
+- `cargo 1.93.1`
+- `rustup 1.28.2`
+- `rustfmt` and `clippy` installed through `rustup component add rustfmt clippy`
+
+However, running the targeted test command natively on Windows did not reach the Ollama tests. The `innerwarden-agent` crate pulls in dependencies that are not currently Windows-clean in this checkout:
+
+- `innerwarden-smm` failed around Unix/Linux-oriented `nix` usage.
+- `tikv-jemalloc-sys` attempted to build jemalloc for `x86_64-pc-windows-msvc` and failed.
+
+Because InnerWarden is a Linux/macOS security agent, I created a Docker-based Linux Rust environment instead of using my personal WSL distributions.
+
+The Docker setup uses a narrow filesystem boundary:
+
+- Host folder exposed to Docker: `sandbox/docker-work`
+- Repo inside that folder: `sandbox/docker-work/innerwarden`
+- Container name: `innerwarden-rust`
+- Docker volume for Rust/Cargo/build output: `innerwarden-rust-data`
+- Container repo path: `/workspace/innerwarden`
+- Rust/Cargo data path: `/rust-data`
+
+The container does not mount my whole user directory, Windows drives, WSL home, Docker socket, or the parent sandbox folder. Only the dedicated `docker-work` folder is exposed.
+
+Inside Docker, the Linux Rust environment is:
+
+- `rustc 1.96.0`
+- `cargo 1.96.0`
+- `rustup 1.29.0`
+
+The command pattern I used for project commands from Windows was:
+
+```powershell
+docker exec innerwarden-rust bash -lc "cd /workspace/innerwarden && <command>"
+```
 
 ### Steps to Reproduce
 
-1. Fork and clone `InnerWarden/innerwarden`.
-2. Install the project dependencies described in the repository README and CONTRIBUTING guide.
-3. Run the existing Ollama provider tests.
-4. Confirm the current test coverage gap described in the issue.
+For this issue, reproduction means confirming the current Ollama provider tests do not exercise the HTTP branches named in the issue.
+
+1. Fork `InnerWarden/innerwarden`.
+2. Clone the fork and check out the issue branch:
+
+   ```bash
+   git clone --branch test/issue-850-ollama-provider-http-branches --single-branch https://github.com/pedropachecog/innerwarden.git
+   cd innerwarden
+   ```
+
+3. Install the Rust formatting and linting components:
+
+   ```bash
+   rustup component add rustfmt clippy
+   ```
+
+4. Run the existing Ollama provider tests:
+
+   ```bash
+   cargo test -p innerwarden-agent ai::ollama -- --nocapture
+   ```
+
+5. Observe that the test suite passes, but only six Ollama tests run.
+6. Inspect the existing Ollama tests and confirm they cover helper/constructor behavior only:
+
+   - `extract_json_bare_object`
+   - `extract_json_strips_prose`
+   - `extract_json_returns_none_for_no_braces`
+   - `new_uses_supplied_values`
+   - `new_stores_api_key`
+   - `url_construction_strips_trailing_slash`
+
+7. Confirm that the baseline tests do not mock `/api/chat`, do not call `OllamaProvider::chat`, and do not call `OllamaProvider::decide`.
+
+**Expected:** The baseline should show that the Ollama provider tests are limited to helpers, constructor storage, API key storage, and URL construction. The issue should still be valid because HTTP response branches are not covered.
+
+**Actual:** The targeted test command passed with six Ollama tests, and all six were helper/constructor tests. No baseline test exercised a mocked `/api/chat` response, `chat`, or `decide`.
+
+### Branch Link
+
+[test/issue-850-ollama-provider-http-branches](https://github.com/pedropachecog/innerwarden/tree/test/issue-850-ollama-provider-http-branches)
 
 ### Reproduction Evidence
 
-- **Commit showing reproduction:** To be added in Phase II.
-- **Screenshots/logs:** To be added in Phase II if useful.
-- **My findings:** To be added after running the tests locally.
+- **Working branch:** [test/issue-850-ollama-provider-http-branches](https://github.com/pedropachecog/innerwarden/tree/test/issue-850-ollama-provider-http-branches)
+- **Baseline commit:** `4e947149` (`feat(ctl,agent): notify discord command + dashboard card (spec 078 P3b) (#1029)`)
+- **Targeted command:**
+
+  ```bash
+  cargo test -p innerwarden-agent ai::ollama -- --nocapture
+  ```
+
+- **Docker command used from Windows:**
+
+  ```powershell
+  docker exec innerwarden-rust bash -lc "cd /workspace/innerwarden && cargo test -p innerwarden-agent ai::ollama -- --nocapture"
+  ```
+
+- **Observed result:**
+
+  ```text
+  running 6 tests
+  test ai::ollama::tests::extract_json_returns_none_for_no_braces ... ok
+  test ai::ollama::tests::extract_json_bare_object ... ok
+  test ai::ollama::tests::extract_json_strips_prose ... ok
+  test ai::ollama::tests::url_construction_strips_trailing_slash ... ok
+  test ai::ollama::tests::new_uses_supplied_values ... ok
+  test ai::ollama::tests::new_stores_api_key ... ok
+
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 3848 filtered out
+  ```
+
+- **My findings:** The existing test file verifies JSON extraction helpers, constructor storage, API key storage, and URL string construction. It does not currently verify the real HTTP response branches in `chat` or `decide`, which matches the issue.
+- **Coverage tooling:** I did not run `cargo tarpaulin` during Phase II. The targeted test output and source inspection were enough to reproduce the test coverage gap requested by the issue.
 
 ---
 
@@ -62,32 +165,54 @@ To be completed in Phase II after forking and cloning the InnerWarden repository
 
 ### Analysis
 
-The likely solution is to add focused async unit tests under the existing test module in `crates/agent/src/ai/ollama.rs`. These tests should use the repository's existing HTTP mocking approach and avoid requiring a live Ollama server.
+The root cause is missing test coverage, not a confirmed runtime crash. The Ollama provider has several branches in its HTTP paths:
+
+- It posts to `/api/chat`.
+- It optionally sends bearer auth.
+- It handles non-2xx HTTP responses.
+- It parses Ollama-style JSON responses.
+- It rejects empty content.
+- `decide` also asks for JSON output, extracts JSON from prose, handles auth failures, and gives a local model-not-found hint.
+
+The existing tests do not drive those branches. They stop at helper and constructor coverage. The code already has the branches named in the issue, so this contribution should add tests before changing provider behavior.
 
 ### Proposed Solution
 
-Add tests for successful `chat` behavior, response parsing, malformed payloads, non-2xx responses, and request errors. Keep the change test-focused unless a small production-code adjustment is necessary to make the behavior testable.
+Add async tests under the existing Ollama test module. Use mocked HTTP responses, not a live Ollama server and not a real API key. Keep production changes minimal; this should be a test coverage PR.
 
 ### Implementation Plan
 
 Using UMPIRE framework:
 
-**Understand:** Confirm how `chat` and `decide` build requests, parse responses, and return errors.
+**Understand:** `chat` and `decide` both build POST requests to the Ollama `/api/chat` endpoint, but the current test suite does not exercise those requests. The missing coverage is around HTTP success/error handling and response parsing.
 
-**Match:** Find similar async HTTP mocking tests in the InnerWarden codebase and follow the same style.
+**Match:** Follow the existing async `mockito` style already used in InnerWarden tests. The agent crate already has `mockito = "1"` as a dev dependency, and other tests use `mockito::Server::new_async().await`, `server.mock(...)`, `create_async().await`, and `assert_async().await`.
 
 **Plan:**
-1. Run the existing `cargo test -p innerwarden-agent ai::ollama` command.
-2. Inspect `crates/agent/src/ai/ollama.rs` and nearby provider tests.
-3. Add mocked HTTP tests for successful and failing response branches.
-4. Run the targeted test command again.
-5. Run any formatting or lint commands required by the project.
+1. Add a mocked successful `chat` test that posts to `/api/chat` and returns `message.content`.
+2. Include trailing slash handling for `base_url` through a mocked request path, not only string formatting.
+3. Add a `chat` test that asserts `Authorization: Bearer <key>` is sent when an API key is configured.
+4. Add `chat` error tests for non-2xx responses, malformed JSON responses, and empty `message.content`.
+5. Add a `decide` success test where the model wraps the JSON object in prose and `extract_json` still allows parsing.
+6. Add `decide` error tests for auth failures, empty content, malformed JSON/no-JSON content, and the local model-not-found hint.
+7. Avoid unrelated refactors. Only extract a small test helper if repeated mock setup becomes awkward.
 
-**Implement:** Branch and commit links will be added during Phase II and Phase III.
+**Implement:** Implementation will happen in Phase III on the existing working branch.
 
-**Review:** Check that the PR is small, test-focused, follows existing style, and does not require real Ollama credentials.
+**Review:** Self-review against InnerWarden's `CONTRIBUTING.md`: small PR, conventional commit format, no real Ollama credentials, no live network dependency in tests, and no unrelated code churn.
 
-**Evaluate:** Verify with `cargo test -p innerwarden-agent ai::ollama` and any additional project checks recommended by maintainers.
+**Evaluate:** Run the targeted Ollama test command after adding tests. Then run `make check`. If time/resources allow, run `make test` before opening a PR.
+
+---
+
+## Phase II Checklist
+
+- [x] Local setup documented, including Windows issue and Docker Linux setup.
+- [x] Numbered reproduction steps written under Reproduction Process.
+- [x] Branch link added.
+- [x] Reproduction evidence recorded with command output.
+- [x] Solution plan written using UMPIRE.
+- [x] No Phase III implementation started.
 
 ---
 
@@ -96,10 +221,14 @@ Using UMPIRE framework:
 ### Unit Tests
 
 - [ ] `chat` posts to `/api/chat`, handles trailing slashes in `base_url`, and returns `message.content` from a successful mock response.
-- [ ] `chat` returns a useful error for malformed or missing message content.
+- [ ] `chat` sends bearer auth when `api_key` is configured.
+- [ ] `chat` returns a parse error for malformed Ollama JSON.
+- [ ] `chat` returns an error for empty message content.
 - [ ] `chat` returns an error for non-2xx HTTP responses.
-- [ ] `decide` handles successful mock responses.
-- [ ] `decide` covers malformed response and request-error branches.
+- [ ] `decide` handles successful mock responses, including JSON wrapped in prose.
+- [ ] `decide` covers authentication failure messaging.
+- [ ] `decide` covers empty content and no-JSON/malformed decision content.
+- [ ] `decide` covers the local model-not-found hint.
 
 ### Integration Tests
 
@@ -107,7 +236,7 @@ No live integration test is planned for the initial PR because the issue explici
 
 ### Manual Testing
 
-Manual testing notes will be added after the local environment is set up in Phase II.
+No manual Ollama server testing is planned for this issue because the acceptance criteria call for mocked HTTP tests.
 
 ---
 
@@ -117,11 +246,15 @@ Manual testing notes will be added after the local environment is set up in Phas
 
 Selected the issue, reviewed the issue requirements, created this contribution README, and prepared to comment on the GitHub issue and fork the repository.
 
+### Phase II Progress
+
+Set up a repeatable Linux Rust environment through Docker on Windows, published the working branch, and reproduced the current coverage gap by running the targeted Ollama provider tests. The baseline passes, but it only runs six helper/constructor tests and does not exercise the HTTP branches named in the issue.
+
 ### Code Changes
 
-- **Files modified:** To be added during implementation.
+- **Files expected to be modified in Phase III:** `crates/agent/src/ai/ollama.rs`
 - **Key commits:** To be added during implementation.
-- **Approach decisions:** Keep the first PR focused on test coverage and avoid unrelated refactors.
+- **Approach decisions:** Keep the first PR limited to test coverage and avoid unrelated refactors.
 
 ---
 
@@ -143,15 +276,15 @@ Selected the issue, reviewed the issue requirements, created this contribution R
 
 ### Technical Skills Gained
 
-To be updated as the contribution progresses.
+I learned how this Rust workspace is organized around crates, how `cargo test -p <crate>` selects a package in a workspace, and why a targeted Rust test still needs the whole crate and its dependencies to compile first.
 
 ### Challenges Overcome
 
-To be updated as the contribution progresses.
+The main setup challenge was that native Windows Rust worked, but this project did not compile cleanly on Windows because some dependencies assume Linux/macOS behavior. I used Docker as a contained Linux Rust environment instead of relying on my personal WSL distributions.
 
 ### What I'd Do Differently Next Time
 
-To be updated as the contribution progresses.
+For Rust projects that describe themselves as Linux/macOS system tools, I would check the supported OS and CI configuration earlier, then start from a Linux dev environment instead of first trying native Windows.
 
 ---
 
@@ -159,4 +292,5 @@ To be updated as the contribution progresses.
 
 - [InnerWarden issue #850](https://github.com/InnerWarden/innerwarden/issues/850)
 - [InnerWarden repository](https://github.com/InnerWarden/innerwarden)
-- CodePath AI301 issue selection instructions
+- [InnerWarden contribution guide](https://github.com/InnerWarden/innerwarden/blob/main/CONTRIBUTING.md)
+- CodePath AI301 Phase II instructions
