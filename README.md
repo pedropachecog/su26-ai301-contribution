@@ -9,9 +9,9 @@
 
 ## Why I Chose This Issue
 
-I chose this issue because it is a test-coverage task around an Ollama provider adapter, which connects to my interest in local LLM tooling while still being realistic for a first open-source contribution. The issue gives clear acceptance criteria, names the exact file involved, and says no real Ollama server or API key should be required.
+I chose this issue because it lines up with what I want to practice: local LLM tooling, Rust, and test coverage. It also looked realistic for a first open-source contribution. The issue names the file, describes the missing branches, and says no real Ollama server or API key is required.
 
-This also fits what I want to practice during AI301: using AI tools to ramp into an unfamiliar codebase, understand existing test patterns, and contribute a small PR that maintainers could actually review. I have experience with C/C++, Python, LLM tooling, GitHub Issues, and debugging, so Rust is the main learning stretch here.
+I have worked with C/C++, Python, LLM tooling, GitHub Issues, and debugging. Rust is the part I am newer to, so I wanted an issue where the Rust learning curve was real but the feature scope was not huge.
 
 ---
 
@@ -21,17 +21,17 @@ This also fits what I want to practice during AI301: using AI tools to ramp into
 
 The `crates/agent/src/ai/ollama.rs` provider adapter has existing tests for construction and JSON extraction helpers, but it is missing coverage for important HTTP response and error-handling branches in `chat` and `decide`.
 
-The specific functions involved are `OllamaProvider::chat`, `OllamaProvider::decide`, and the existing test module in the same file.
+The functions involved are `OllamaProvider::chat`, `OllamaProvider::decide`, and the existing test module in the same file.
 
 ### Expected Behavior
 
-The provider should be tested with mocked HTTP responses so successful responses, malformed responses, HTTP errors, and request failures are covered without needing a real Ollama server.
+The provider needs mocked HTTP tests for successful responses, malformed responses, HTTP errors, and request failures. Those tests should not need a real Ollama server.
 
 ### Current Behavior
 
-The issue reports that local coverage for this file is only 72.86% line coverage, with missing coverage in the `chat` and `decide` HTTP handling paths.
+The issue reports 72.86% line coverage for this file, with missing coverage in the `chat` and `decide` HTTP handling paths.
 
-My local baseline reproduces the same kind of gap: the targeted Ollama test command passes, but it only runs six helper/constructor tests and does not exercise the provider's HTTP behavior.
+My baseline matches that gap. The targeted Ollama test command passes, but it only runs six helper/constructor tests. None of them exercise the provider's HTTP behavior.
 
 ### Affected Components
 
@@ -57,9 +57,9 @@ However, running the targeted test command natively on Windows did not reach the
 - `innerwarden-smm` failed around Unix/Linux-oriented `nix` usage.
 - `tikv-jemalloc-sys` attempted to build jemalloc for `x86_64-pc-windows-msvc` and failed.
 
-Because InnerWarden is a Linux/macOS security agent, I created a Docker-based Linux Rust environment instead of using my personal WSL distributions.
+Because InnerWarden is a Linux/macOS security agent, I used Docker for the Linux Rust environment instead of using my personal WSL distributions.
 
-The Docker setup uses a narrow filesystem boundary:
+The Docker setup exposes only the project work folder:
 
 - Host folder exposed to Docker: `sandbox/docker-work`
 - Repo inside that folder: `sandbox/docker-work/innerwarden`
@@ -68,7 +68,7 @@ The Docker setup uses a narrow filesystem boundary:
 - Container repo path: `/workspace/innerwarden`
 - Rust/Cargo data path: `/rust-data`
 
-The container does not mount my whole user directory, Windows drives, WSL home, Docker socket, or the parent sandbox folder. Only the dedicated `docker-work` folder is exposed.
+The container does not mount my user directory, Windows drives, WSL home, Docker socket, or the parent sandbox folder. Only `docker-work` is exposed.
 
 Inside Docker, the Linux Rust environment is:
 
@@ -84,7 +84,7 @@ docker exec innerwarden-rust bash -lc "cd /workspace/innerwarden && <command>"
 
 ### Steps to Reproduce
 
-For this issue, reproduction means confirming the current Ollama provider tests do not exercise the HTTP branches named in the issue.
+For this issue, reproduction means showing that the existing Ollama provider tests skip the HTTP branches named in the issue.
 
 1. Fork `InnerWarden/innerwarden`.
 2. Clone the fork and check out the issue branch:
@@ -118,7 +118,7 @@ For this issue, reproduction means confirming the current Ollama provider tests 
 
 7. Confirm that the baseline tests do not mock `/api/chat`, do not call `OllamaProvider::chat`, and do not call `OllamaProvider::decide`.
 
-**Expected:** The baseline should show that the Ollama provider tests are limited to helpers, constructor storage, API key storage, and URL construction. The issue should still be valid because HTTP response branches are not covered.
+**Expected:** The baseline shows that the Ollama provider tests are limited to helpers, constructor storage, API key storage, and URL construction. The issue remains valid because the HTTP response branches are not covered.
 
 **Actual:** The targeted test command passed with six Ollama tests, and all six were helper/constructor tests. No baseline test exercised a mocked `/api/chat` response, `chat`, or `decide`.
 
@@ -156,8 +156,8 @@ For this issue, reproduction means confirming the current Ollama provider tests 
   test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 3848 filtered out
   ```
 
-- **My findings:** The existing test file verifies JSON extraction helpers, constructor storage, API key storage, and URL string construction. It does not currently verify the real HTTP response branches in `chat` or `decide`, which matches the issue.
-- **Coverage tooling:** I did not run `cargo tarpaulin` during Phase II. The targeted test output and source inspection were enough to reproduce the test coverage gap requested by the issue.
+- **My findings:** The existing test file verifies JSON extraction helpers, constructor storage, API key storage, and URL string construction. It does not verify the real HTTP response branches in `chat` or `decide`, which matches the issue.
+- **Coverage tooling:** I did not run `cargo tarpaulin` during Phase II. The targeted test output and source inspection were enough for this reproduction step.
 
 ---
 
@@ -165,7 +165,7 @@ For this issue, reproduction means confirming the current Ollama provider tests 
 
 ### Analysis
 
-The root cause is missing test coverage, not a confirmed runtime crash. The Ollama provider has several branches in its HTTP paths:
+The root cause is missing test coverage, not a runtime bug I can trigger manually. The Ollama provider has several branches in its HTTP paths:
 
 - It posts to `/api/chat`.
 - It optionally sends bearer auth.
@@ -174,28 +174,28 @@ The root cause is missing test coverage, not a confirmed runtime crash. The Olla
 - It rejects empty content.
 - `decide` also asks for JSON output, extracts JSON from prose, handles auth failures, and gives a local model-not-found hint.
 
-The existing tests do not drive those branches. They stop at helper and constructor coverage. The code already has the branches named in the issue, so this contribution should add tests before changing provider behavior.
+The existing tests do not drive those branches. They stop at helper and constructor coverage. The code already has the branches named in the issue, so the first PR should add tests before changing provider behavior.
 
 ### Proposed Solution
 
-Add async tests under the existing Ollama test module. Use mocked HTTP responses, not a live Ollama server and not a real API key. Keep production changes minimal; this should be a test coverage PR.
+Add async tests under the existing Ollama test module. Use mocked HTTP responses, not a live Ollama server and not a real API key. Keep production changes minimal.
 
 ### Implementation Plan
 
 Using UMPIRE framework:
 
-**Understand:** `chat` and `decide` both build POST requests to the Ollama `/api/chat` endpoint, but the current test suite does not exercise those requests. The missing coverage is around HTTP success/error handling and response parsing.
+**Understand:** `chat` and `decide` both build POST requests to the Ollama `/api/chat` endpoint, but the current test suite does not exercise those requests. The missing coverage is in HTTP success/error handling and response parsing.
 
 **Match:** Follow the existing async `mockito` style already used in InnerWarden tests. The agent crate already has `mockito = "1"` as a dev dependency, and other tests use `mockito::Server::new_async().await`, `server.mock(...)`, `create_async().await`, and `assert_async().await`.
 
 **Plan:**
 1. Add a mocked successful `chat` test that posts to `/api/chat` and returns `message.content`.
-2. Include trailing slash handling for `base_url` through a mocked request path, not only string formatting.
+2. Include trailing slash handling for `base_url` through a mocked request path instead of checking only string formatting.
 3. Add a `chat` test that asserts `Authorization: Bearer <key>` is sent when an API key is configured.
 4. Add `chat` error tests for non-2xx responses, malformed JSON responses, and empty `message.content`.
 5. Add a `decide` success test where the model wraps the JSON object in prose and `extract_json` still allows parsing.
 6. Add `decide` error tests for auth failures, empty content, malformed JSON/no-JSON content, and the local model-not-found hint.
-7. Avoid unrelated refactors. Only extract a small test helper if repeated mock setup becomes awkward.
+7. Avoid unrelated refactors. Extract a small test helper only if the repeated mock setup gets awkward.
 
 **Implement:** Implementation will happen in Phase III on the existing working branch.
 
@@ -232,11 +232,11 @@ Using UMPIRE framework:
 
 ### Integration Tests
 
-No live integration test is planned for the initial PR because the issue explicitly says no real Ollama server or API key should be required.
+No live integration test is planned for the initial PR. The issue says no real Ollama server or API key should be required.
 
 ### Manual Testing
 
-No manual Ollama server testing is planned for this issue because the acceptance criteria call for mocked HTTP tests.
+No manual Ollama server testing is planned for this issue. The acceptance criteria call for mocked HTTP tests.
 
 ---
 
@@ -248,7 +248,7 @@ Selected the issue, reviewed the issue requirements, created this contribution R
 
 ### Phase II Progress
 
-Set up a repeatable Linux Rust environment through Docker on Windows, published the working branch, and reproduced the current coverage gap by running the targeted Ollama provider tests. The baseline passes, but it only runs six helper/constructor tests and does not exercise the HTTP branches named in the issue.
+Set up a repeatable Linux Rust environment through Docker on Windows, published the working branch, and reproduced the coverage gap by running the targeted Ollama provider tests. The baseline passes, but it only runs six helper/constructor tests and does not exercise the HTTP branches named in the issue.
 
 ### Code Changes
 
@@ -276,11 +276,11 @@ Set up a repeatable Linux Rust environment through Docker on Windows, published 
 
 ### Technical Skills Gained
 
-I learned how this Rust workspace is organized around crates, how `cargo test -p <crate>` selects a package in a workspace, and why a targeted Rust test still needs the whole crate and its dependencies to compile first.
+I learned how this Rust workspace is organized around crates, how `cargo test -p <crate>` selects a package in a workspace, and why even a targeted Rust test still needs the whole crate and its dependencies to compile first.
 
 ### Challenges Overcome
 
-The main setup challenge was that native Windows Rust worked, but this project did not compile cleanly on Windows because some dependencies assume Linux/macOS behavior. I used Docker as a contained Linux Rust environment instead of relying on my personal WSL distributions.
+The main setup challenge was that native Windows Rust worked, but this project did not compile cleanly on Windows because some dependencies assume Linux/macOS behavior. I used Docker as a contained Linux Rust environment instead of relying on my personal WSL setup.
 
 ### What I'd Do Differently Next Time
 
