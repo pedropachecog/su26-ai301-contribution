@@ -178,7 +178,7 @@ The existing tests do not drive those branches. They stop at helper and construc
 
 ### Implemented Solution
 
-Added async tests under the existing Ollama test module. The tests use mocked HTTP responses, not a live Ollama server and not a real API key. I kept the change test-only and did not modify production provider behavior.
+I added async tests under the existing Ollama test module. The tests use mocked HTTP responses, so they do not need a live Ollama server or a real API key. I kept this test-only and did not change the provider code.
 
 ### Implementation Plan
 
@@ -189,18 +189,18 @@ Using UMPIRE framework:
 **Match:** Follow the existing async `mockito` style already used in InnerWarden tests. The agent crate already has `mockito = "1"` as a dev dependency, and other tests use `mockito::Server::new_async().await`, `server.mock(...)`, `create_async().await`, and `assert_async().await`.
 
 **Plan completed:**
-1. Added a mocked successful `chat` test that posts to `/api/chat`, covers trailing slash handling, and returns `message.content`.
-2. Added a `chat` test that asserts `Authorization: Bearer <key>` is sent when an API key is configured.
+1. Added a successful `chat` mock test that posts to `/api/chat`, covers trailing slash handling, and returns `message.content`.
+2. Added a `chat` test that checks `Authorization: Bearer <key>` when an API key is configured.
 3. Added `chat` error tests for non-2xx responses and empty `message.content`.
-4. Added a `decide` success test where the model wraps the JSON object in prose and `extract_json` still allows parsing.
-5. Added `decide` error tests for auth failures and the local model-not-found hint.
-6. Avoided unrelated refactors and kept production code unchanged.
+4. Added a `decide` success test where the model wraps JSON in prose and `extract_json` still allows parsing.
+5. Added `decide` error tests for auth failure and the local model-not-found hint.
+6. Avoided unrelated refactors.
 
 **Implement:** Completed in Phase III on the existing working branch.
 
-**Review:** Self-reviewed against InnerWarden's `CONTRIBUTING.md`: small PR scope, conventional commit format, no real Ollama credentials, no live network dependency in tests, and no unrelated production changes.
+**Review:** I checked the change against InnerWarden's `CONTRIBUTING.md`: small scope, conventional commit format, no real Ollama credentials, no live network dependency in tests, and no unrelated production changes.
 
-**Evaluate:** The targeted Ollama tests pass, `cargo fmt --check` passes, and `make check` passes in Docker when pointed at the configured Cargo path. A full `make test` run hit one unrelated root-permission-sensitive test outside this change; details are in Testing Strategy.
+**Evaluate:** The targeted Ollama tests pass. `cargo fmt --check` passes. `make check` passes in Docker when I point it at the configured Cargo path. The full `make test` run hit one unrelated root-permission-sensitive test outside this change; details are in Testing Strategy.
 
 ---
 
@@ -241,7 +241,7 @@ Using UMPIRE framework:
 - [x] `decide` covers authentication failure messaging.
 - [x] `decide` covers the local model-not-found hint.
 
-I did not add live integration tests, malformed-response tests, or real Ollama calls in this pass. The issue acceptance criteria asked for mocked HTTP tests and at least five new tests; this branch adds seven focused mock tests that cover the branches listed in the issue.
+I did not add live integration tests, malformed-response tests, or real Ollama calls in this pass. The issue asked for mocked HTTP tests and at least five new tests. This branch adds seven focused mock tests that cover the main branches listed in the issue.
 
 ### Integration Tests
 
@@ -249,7 +249,7 @@ No live integration test is planned for the initial PR. The issue says no real O
 
 ### Manual Testing
 
-No manual Ollama server testing is planned for this issue. The acceptance criteria call for mocked HTTP tests.
+I did not test against a real Ollama server. For this issue, mocked HTTP tests are the right fit.
 
 ### Validation Results
 
@@ -269,7 +269,9 @@ Results:
 - `cargo test -p innerwarden-agent ai::ollama -- --nocapture`: passed, 13 Ollama tests total.
 - `cargo fmt --check`: passed.
 - `make check CARGO=/usr/local/bin/cargo`: passed.
-- `make test CARGO=/usr/local/bin/cargo`: failed on one unrelated test, `knowledge_graph::persistence::tests::rename_snapshot_or_warn_emits_warn_on_real_failure`. That test expects `chmod 0500` to make a directory unwritable. The Docker container runs as root, so the rename can succeed and no warning is captured. The failure is outside `crates/agent/src/ai/ollama.rs`.
+- `make test CARGO=/usr/local/bin/cargo`: failed on one unrelated test, `knowledge_graph::persistence::tests::rename_snapshot_or_warn_emits_warn_on_real_failure`.
+
+That failing test expects `chmod 0500` to make a directory unwritable. The Docker container runs as root, so the rename can succeed and no warning is captured. The failure is outside `crates/agent/src/ai/ollama.rs`.
 
 ---
 
@@ -285,7 +287,7 @@ Set up a repeatable Linux Rust environment through Docker on Windows, published 
 
 ### Week 3 / Phase III Progress
 
-Implemented the issue as a focused test-only change. I added seven async `mockito` tests to the Ollama provider test module:
+I implemented the issue as a focused test-only change. I added seven async `mockito` tests to the Ollama provider test module:
 
 - successful `chat` response through `/api/chat`
 - `chat` trailing slash handling through the actual mock path
@@ -297,7 +299,7 @@ Implemented the issue as a focused test-only change. I added seven async `mockit
 
 The implementation commit is [`c0c59be3`](https://github.com/pedropachecog/innerwarden/commit/c0c59be3d41a23ef668137270c77da40455d3c5a). The working branch is pushed here: [test/issue-850-ollama-provider-http-branches](https://github.com/pedropachecog/innerwarden/tree/test/issue-850-ollama-provider-http-branches).
 
-The main challenge this week was environment-related. `make check` initially looked for Cargo at `/root/.cargo/bin/cargo`, while this Docker setup exposes Cargo at `/usr/local/bin/cargo`, so I reran it with `CARGO=/usr/local/bin/cargo`. The full workspace test run also exposed an unrelated root-permission-sensitive knowledge graph test, documented above.
+The main challenge this week was environment-related. `make check` initially looked for Cargo at `/root/.cargo/bin/cargo`, while this Docker setup exposes Cargo at `/usr/local/bin/cargo`. I reran it with `CARGO=/usr/local/bin/cargo`, and it passed. The full workspace test run also exposed the unrelated root-permission-sensitive knowledge graph test noted above.
 
 ### Code Changes
 
