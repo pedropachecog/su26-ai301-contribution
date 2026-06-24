@@ -3,7 +3,7 @@
 **Contribution Number:** 1  
 **Student:** Pedro Pacheco  
 **Issue:** [InnerWarden #850: test(agent): cover Ollama provider HTTP response branches](https://github.com/InnerWarden/innerwarden/issues/850)  
-**Status:** Phase II Complete Draft
+**Status:** Phase III Complete
 
 ---
 
@@ -176,9 +176,9 @@ The root cause is missing test coverage, not a runtime bug I can trigger manuall
 
 The existing tests do not drive those branches. They stop at helper and constructor coverage. The code already has the branches named in the issue, so the first PR should add tests before changing provider behavior.
 
-### Proposed Solution
+### Implemented Solution
 
-Add async tests under the existing Ollama test module. Use mocked HTTP responses, not a live Ollama server and not a real API key. Keep production changes minimal.
+Added async tests under the existing Ollama test module. The tests use mocked HTTP responses, not a live Ollama server and not a real API key. I kept the change test-only and did not modify production provider behavior.
 
 ### Implementation Plan
 
@@ -188,20 +188,19 @@ Using UMPIRE framework:
 
 **Match:** Follow the existing async `mockito` style already used in InnerWarden tests. The agent crate already has `mockito = "1"` as a dev dependency, and other tests use `mockito::Server::new_async().await`, `server.mock(...)`, `create_async().await`, and `assert_async().await`.
 
-**Plan:**
-1. Add a mocked successful `chat` test that posts to `/api/chat` and returns `message.content`.
-2. Include trailing slash handling for `base_url` through a mocked request path instead of checking only string formatting.
-3. Add a `chat` test that asserts `Authorization: Bearer <key>` is sent when an API key is configured.
-4. Add `chat` error tests for non-2xx responses, malformed JSON responses, and empty `message.content`.
-5. Add a `decide` success test where the model wraps the JSON object in prose and `extract_json` still allows parsing.
-6. Add `decide` error tests for auth failures, empty content, malformed JSON/no-JSON content, and the local model-not-found hint.
-7. Avoid unrelated refactors. Extract a small test helper only if the repeated mock setup gets awkward.
+**Plan completed:**
+1. Added a mocked successful `chat` test that posts to `/api/chat`, covers trailing slash handling, and returns `message.content`.
+2. Added a `chat` test that asserts `Authorization: Bearer <key>` is sent when an API key is configured.
+3. Added `chat` error tests for non-2xx responses and empty `message.content`.
+4. Added a `decide` success test where the model wraps the JSON object in prose and `extract_json` still allows parsing.
+5. Added `decide` error tests for auth failures and the local model-not-found hint.
+6. Avoided unrelated refactors and kept production code unchanged.
 
-**Implement:** Implementation will happen in Phase III on the existing working branch.
+**Implement:** Completed in Phase III on the existing working branch.
 
-**Review:** Self-review against InnerWarden's `CONTRIBUTING.md`: small PR, conventional commit format, no real Ollama credentials, no live network dependency in tests, and no unrelated code churn.
+**Review:** Self-reviewed against InnerWarden's `CONTRIBUTING.md`: small PR scope, conventional commit format, no real Ollama credentials, no live network dependency in tests, and no unrelated production changes.
 
-**Evaluate:** Run the targeted Ollama test command after adding tests. Then run `make check`. If time/resources allow, run `make test` before opening a PR.
+**Evaluate:** The targeted Ollama tests pass, `cargo fmt --check` passes, and `make check` passes in Docker when pointed at the configured Cargo path. A full `make test` run hit one unrelated root-permission-sensitive test outside this change; details are in Testing Strategy.
 
 ---
 
@@ -212,23 +211,37 @@ Using UMPIRE framework:
 - [x] Branch link added.
 - [x] Reproduction evidence recorded with command output.
 - [x] Solution plan written using UMPIRE.
-- [x] No Phase III implementation started.
+- [x] No Phase III implementation had started at the Phase II check-in.
+
+---
+
+## Phase III Checklist
+
+- [x] Reviewed InnerWarden `CONTRIBUTING.md` and PR template.
+- [x] Rebased working branch on current upstream `main`.
+- [x] Added mocked Ollama HTTP branch tests.
+- [x] Kept the implementation test-only.
+- [x] Ran targeted Ollama tests successfully.
+- [x] Ran `cargo fmt --check` successfully.
+- [x] Ran `make check` successfully with the Docker Cargo path override.
+- [x] Pushed implementation branch to the fork.
+- [ ] Full `make test` completed cleanly. It currently fails on an unrelated root-permission-sensitive knowledge graph persistence test in the Docker container.
 
 ---
 
 ## Testing Strategy
 
-### Unit Tests
+### Unit Tests Added
 
-- [ ] `chat` posts to `/api/chat`, handles trailing slashes in `base_url`, and returns `message.content` from a successful mock response.
-- [ ] `chat` sends bearer auth when `api_key` is configured.
-- [ ] `chat` returns a parse error for malformed Ollama JSON.
-- [ ] `chat` returns an error for empty message content.
-- [ ] `chat` returns an error for non-2xx HTTP responses.
-- [ ] `decide` handles successful mock responses, including JSON wrapped in prose.
-- [ ] `decide` covers authentication failure messaging.
-- [ ] `decide` covers empty content and no-JSON/malformed decision content.
-- [ ] `decide` covers the local model-not-found hint.
+- [x] `chat` posts to `/api/chat`, handles trailing slashes in `base_url`, and returns `message.content` from a successful mock response.
+- [x] `chat` sends bearer auth when `api_key` is configured.
+- [x] `chat` returns an error for empty message content.
+- [x] `chat` returns an error for non-2xx HTTP responses and includes the response body.
+- [x] `decide` handles successful mock responses, including JSON wrapped in prose.
+- [x] `decide` covers authentication failure messaging.
+- [x] `decide` covers the local model-not-found hint.
+
+I did not add live integration tests, malformed-response tests, or real Ollama calls in this pass. The issue acceptance criteria asked for mocked HTTP tests and at least five new tests; this branch adds seven focused mock tests that cover the branches listed in the issue.
 
 ### Integration Tests
 
@@ -237,6 +250,26 @@ No live integration test is planned for the initial PR. The issue says no real O
 ### Manual Testing
 
 No manual Ollama server testing is planned for this issue. The acceptance criteria call for mocked HTTP tests.
+
+### Validation Results
+
+The branch was rebased on upstream `main` before implementation. The latest implementation commit is [`c0c59be3`](https://github.com/pedropachecog/innerwarden/commit/c0c59be3d41a23ef668137270c77da40455d3c5a).
+
+Commands run in Docker:
+
+```bash
+cargo test -p innerwarden-agent ai::ollama -- --nocapture
+cargo fmt --check
+make check CARGO=/usr/local/bin/cargo
+make test CARGO=/usr/local/bin/cargo
+```
+
+Results:
+
+- `cargo test -p innerwarden-agent ai::ollama -- --nocapture`: passed, 13 Ollama tests total.
+- `cargo fmt --check`: passed.
+- `make check CARGO=/usr/local/bin/cargo`: passed.
+- `make test CARGO=/usr/local/bin/cargo`: failed on one unrelated test, `knowledge_graph::persistence::tests::rename_snapshot_or_warn_emits_warn_on_real_failure`. That test expects `chmod 0500` to make a directory unwritable. The Docker container runs as root, so the rename can succeed and no warning is captured. The failure is outside `crates/agent/src/ai/ollama.rs`.
 
 ---
 
@@ -250,25 +283,41 @@ Selected the issue, reviewed the issue requirements, created this contribution R
 
 Set up a repeatable Linux Rust environment through Docker on Windows, published the working branch, and reproduced the coverage gap by running the targeted Ollama provider tests. The baseline passes, but it only runs six helper/constructor tests and does not exercise the HTTP branches named in the issue.
 
+### Week 3 / Phase III Progress
+
+Implemented the issue as a focused test-only change. I added seven async `mockito` tests to the Ollama provider test module:
+
+- successful `chat` response through `/api/chat`
+- `chat` trailing slash handling through the actual mock path
+- `chat` bearer auth header
+- `chat` non-2xx error body
+- `chat` empty content error
+- `decide` JSON extraction from prose
+- `decide` auth hint and local model-not-found hint
+
+The implementation commit is [`c0c59be3`](https://github.com/pedropachecog/innerwarden/commit/c0c59be3d41a23ef668137270c77da40455d3c5a). The working branch is pushed here: [test/issue-850-ollama-provider-http-branches](https://github.com/pedropachecog/innerwarden/tree/test/issue-850-ollama-provider-http-branches).
+
+The main challenge this week was environment-related. `make check` initially looked for Cargo at `/root/.cargo/bin/cargo`, while this Docker setup exposes Cargo at `/usr/local/bin/cargo`, so I reran it with `CARGO=/usr/local/bin/cargo`. The full workspace test run also exposed an unrelated root-permission-sensitive knowledge graph test, documented above.
+
 ### Code Changes
 
-- **Files expected to be modified in Phase III:** `crates/agent/src/ai/ollama.rs`
-- **Key commits:** To be added during implementation.
-- **Approach decisions:** Keep the first PR limited to test coverage and avoid unrelated refactors.
+- **File modified:** `crates/agent/src/ai/ollama.rs`
+- **Key commit:** [`c0c59be3`](https://github.com/pedropachecog/innerwarden/commit/c0c59be3d41a23ef668137270c77da40455d3c5a) - `test(agent): cover Ollama HTTP response branches`
+- **Approach decisions:** Kept the PR limited to test coverage, used mock HTTP servers only, and avoided unrelated refactors.
 
 ---
 
 ## Pull Request
 
-**PR Link:** To be added after implementation.
+**PR Link:** Not opened yet. The implementation branch is pushed and ready for PR preparation in Phase IV.
 
-**PR Description:** To be drafted after the solution is implemented and verified.
+**PR Description:** To be drafted in Phase IV from the implementation notes and validation results above.
 
 **Maintainer Feedback:**
 
 - To be updated as feedback is received.
 
-**Status:** Not submitted yet.
+**Status:** Branch pushed; PR not submitted yet.
 
 ---
 
@@ -294,3 +343,4 @@ For Rust projects that describe themselves as Linux/macOS system tools, I would 
 - [InnerWarden repository](https://github.com/InnerWarden/innerwarden)
 - [InnerWarden contribution guide](https://github.com/InnerWarden/innerwarden/blob/main/CONTRIBUTING.md)
 - CodePath AI301 Phase II instructions
+- CodePath AI301 Phase III instructions
