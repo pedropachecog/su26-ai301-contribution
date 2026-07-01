@@ -3,7 +3,7 @@
 **Contribution Number:** 1  
 **Student:** Pedro Pacheco  
 **Issue:** [InnerWarden #850: test(agent): cover Ollama provider HTTP response branches](https://github.com/InnerWarden/innerwarden/issues/850)  
-**Status:** Phase III Complete
+**Status:** Phase IV PR Submitted - Awaiting Review
 
 ---
 
@@ -311,15 +311,17 @@ The main challenge this week was environment-related. `make check` initially loo
 
 ## Pull Request
 
-**PR Link:** Not opened yet. The implementation branch is pushed and ready for PR preparation in Phase IV.
+**PR Link:** [InnerWarden PR #1178](https://github.com/InnerWarden/innerwarden/pull/1178)
 
-**PR Description:** To be drafted in Phase IV from the implementation notes and validation results above.
+**PR Description:**
+
+I submitted a test-only PR for InnerWarden issue #850. The PR adds mocked async HTTP tests for the Ollama provider's `/api/chat` response branches, including successful chat responses, bearer auth, non-2xx errors, empty content, JSON extraction from prose in `decide`, auth guidance, and the local model-not-found hint.
 
 **Maintainer Feedback:**
 
-- To be updated as feedback is received.
+- July 1, 2026: PR opened and awaiting maintainer review.
 
-**Status:** Branch pushed; PR not submitted yet.
+**Status:** Awaiting review.
 
 ---
 
